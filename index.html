@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catch the Dot!</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Press Start 2P', cursive;
+            background-color: #1a202c; /* Tailwind gray-900 */
+            color: #e2e8f0; /* Tailwind gray-300 */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden; /* Prevent scrollbars from game area resizing */
+        }
+        #game-container {
+            width: 90vw; /* Responsive width */
+            max-width: 600px; /* Max width for larger screens */
+            height: 70vh; /* Responsive height */
+            max-height: 400px; /* Max height */
+            background-color: #2d3748; /* Tailwind gray-800 */
+            border: 4px solid #4a5568; /* Tailwind gray-600 */
+            border-radius: 12px;
+            position: relative;
+            cursor: crosshair;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3), 0 6px 6px rgba(0,0,0,0.25);
+            overflow: hidden; /* Ensure dot stays within bounds */
+        }
+        #dot {
+            width: 40px;
+            height: 40px;
+            background-color: #f56565; /* Tailwind red-500 */
+            border-radius: 50%;
+            position: absolute;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out, transform 0.1s ease-out;
+            box-shadow: 0 0 15px #f56565, 0 0 25px #f56565aa;
+        }
+        #dot:hover {
+            background-color: #fc8181; /* Tailwind red-400 */
+            transform: scale(1.1);
+        }
+        #score-board {
+            margin-top: 20px;
+            font-size: 1.5rem; /* 24px */
+            padding: 10px 20px;
+            background-color: #4a5568; /* Tailwind gray-700 */
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+        .message-box {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #48bb78; /* Tailwind green-500 */
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out, top 0.5s ease-in-out;
+            font-size: 1rem;
+        }
+        .message-box.show {
+            opacity: 1;
+            top: 30px;
+        }
+        button#resetButton {
+            font-family: 'Press Start 2P', cursive;
+            background-color: #4299e1; /* Tailwind blue-500 */
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+        button#resetButton:hover {
+            background-color: #3182ce; /* Tailwind blue-600 */
+            transform: translateY(-2px);
+        }
+        button#resetButton:active {
+            transform: translateY(0px);
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 600px) {
+            #dot {
+                width: 30px;
+                height: 30px;
+            }
+            #score-board {
+                font-size: 1.25rem; /* 20px */
+            }
+            button#resetButton {
+                font-size: 0.9rem;
+                padding: 10px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="dot"></div>
+    </div>
+
+    <div id="score-board">Score: <span id="score">0</span></div>
+    <button id="resetButton">Reset Game</button>
+
+    <div id="messageBox" class="message-box">Dot Clicked!</div>
+
+    <script>
+        // Get DOM elements
+        const gameContainer = document.getElementById('game-container');
+        const dot = document.getElementById('dot');
+        const scoreDisplay = document.getElementById('score');
+        const resetButton = document.getElementById('resetButton');
+        const messageBox = document.getElementById('messageBox');
+
+        // Game state
+        let score = 0;
+        let gameContainerWidth = gameContainer.clientWidth;
+        let gameContainerHeight = gameContainer.clientHeight;
+        const dotWidth = dot.offsetWidth;
+        const dotHeight = dot.offsetHeight;
+
+        // Function to show a temporary message
+        function showMessage(message, duration = 1000) {
+            messageBox.textContent = message;
+            messageBox.classList.add('show');
+            setTimeout(() => {
+                messageBox.classList.remove('show');
+            }, duration);
+        }
+
+        // Function to move the dot to a random position
+        function moveDot() {
+            // Update container dimensions in case of resize
+            gameContainerWidth = gameContainer.clientWidth;
+            gameContainerHeight = gameContainer.clientHeight;
+            
+            // Calculate maximum possible x and y coordinates for the dot
+            // The dot's position is its top-left corner, so we subtract its dimensions
+            const maxX = gameContainerWidth - dotWidth;
+            const maxY = gameContainerHeight - dotHeight;
+
+            // Generate random coordinates, ensuring they are not negative
+            const randomX = Math.max(0, Math.floor(Math.random() * maxX));
+            const randomY = Math.max(0, Math.floor(Math.random() * maxY));
+
+            // Apply the new position to the dot
+            dot.style.left = randomX + 'px';
+            dot.style.top = randomY + 'px';
+        }
+
+        // Function to update the score display
+        function updateScore() {
+            scoreDisplay.textContent = score;
+        }
+
+        // Event listener for clicking the dot
+        dot.addEventListener('click', () => {
+            score++; // Increment score
+            updateScore(); // Update the displayed score
+            showMessage('Great Shot!'); // Show feedback message
+            moveDot(); // Move the dot to a new random position
+        });
+
+        // Event listener for the reset button
+        resetButton.addEventListener('click', () => {
+            score = 0;
+            updateScore();
+            showMessage('Game Reset!', 1500);
+            moveDot(); // Move dot to a new position
+        });
+        
+        // Function to handle window resize
+        function handleResize() {
+            // Recalculate game container dimensions
+            gameContainerWidth = gameContainer.clientWidth;
+            gameContainerHeight = gameContainer.clientHeight;
+            // Reposition the dot to ensure it's within the new bounds
+            // This is a simple approach; a more complex game might need to pause and rescale elements
+            moveDot(); 
+        }
+
+        // Add event listener for window resize
+        window.addEventListener('resize', handleResize);
+
+        // Initial setup
+        window.onload = function() {
+            updateScore(); // Set initial score display
+            moveDot();     // Place the dot for the first time
+            // Ensure initial dimensions are correct
+            gameContainerWidth = gameContainer.clientWidth;
+            gameContainerHeight = gameContainer.clientHeight;
+        };
+    </script>
+
+</body>
+</html>
