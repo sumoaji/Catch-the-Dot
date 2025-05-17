@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Catch the Dot!</title>
+    <title>Catch the Dot - Timed Challenge!</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
@@ -17,20 +17,20 @@
             justify-content: center;
             min-height: 100vh;
             margin: 0;
-            overflow: hidden; /* Prevent scrollbars from game area resizing */
+            overflow: hidden;
         }
         #game-container {
-            width: 90vw; /* Responsive width */
-            max-width: 600px; /* Max width for larger screens */
-            height: 70vh; /* Responsive height */
-            max-height: 400px; /* Max height */
+            width: 90vw;
+            max-width: 600px;
+            height: 65vh; /* Adjusted height for timer */
+            max-height: 350px;
             background-color: #2d3748; /* Tailwind gray-800 */
             border: 4px solid #4a5568; /* Tailwind gray-600 */
             border-radius: 12px;
             position: relative;
             cursor: crosshair;
             box-shadow: 0 10px 20px rgba(0,0,0,0.3), 0 6px 6px rgba(0,0,0,0.25);
-            overflow: hidden; /* Ensure dot stays within bounds */
+            overflow: hidden;
         }
         #dot {
             width: 40px;
@@ -39,20 +39,32 @@
             border-radius: 50%;
             position: absolute;
             cursor: pointer;
-            transition: background-color 0.2s ease-in-out, transform 0.1s ease-out;
+            transition: background-color 0.2s ease-in-out, transform 0.1s ease-out, opacity 0.3s ease;
             box-shadow: 0 0 15px #f56565, 0 0 25px #f56565aa;
         }
         #dot:hover {
             background-color: #fc8181; /* Tailwind red-400 */
             transform: scale(1.1);
         }
-        #score-board {
-            margin-top: 20px;
-            font-size: 1.5rem; /* 24px */
-            padding: 10px 20px;
+        #dot.disabled { /* Style for when the dot is not clickable */
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .stats-container {
+            display: flex;
+            justify-content: space-around;
+            width: 90%;
+            max-width: 400px; /* Max width for stats */
+            margin-top: 15px; /* Reduced margin */
+            margin-bottom: 15px;
+        }
+        .stat-box {
+            font-size: 1.25rem; /* 20px */
+            padding: 8px 15px;
             background-color: #4a5568; /* Tailwind gray-700 */
             border-radius: 8px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            text-align: center;
         }
         .message-box {
             position: fixed;
@@ -73,6 +85,9 @@
             opacity: 1;
             top: 30px;
         }
+        .message-box.error {
+            background-color: #e53e3e; /* Tailwind red-600 */
+        }
         button#resetButton {
             font-family: 'Press Start 2P', cursive;
             background-color: #4299e1; /* Tailwind blue-500 */
@@ -82,7 +97,7 @@
             border-radius: 8px;
             font-size: 1rem;
             cursor: pointer;
-            margin-top: 20px;
+            margin-top: 10px; /* Reduced margin */
             transition: background-color 0.2s ease, transform 0.1s ease;
             box-shadow: 0 4px 6px rgba(0,0,0,0.2);
         }
@@ -94,14 +109,19 @@
             transform: translateY(0px);
         }
 
-        /* Responsive adjustments */
         @media (max-width: 600px) {
             #dot {
                 width: 30px;
                 height: 30px;
             }
-            #score-board {
-                font-size: 1.25rem; /* 20px */
+            .stats-container {
+                flex-direction: column; /* Stack stats vertically on small screens */
+                align-items: center;
+            }
+            .stat-box {
+                font-size: 1rem; /* 16px */
+                margin-bottom: 8px; /* Add space between stacked boxes */
+                width: 70%; /* Make stat boxes wider when stacked */
             }
             button#resetButton {
                 font-size: 0.9rem;
@@ -116,96 +136,170 @@
         <div id="dot"></div>
     </div>
 
-    <div id="score-board">Score: <span id="score">0</span></div>
-    <button id="resetButton">Reset Game</button>
+    <div class="stats-container">
+        <div id="score-board" class="stat-box">Score: <span id="score">0</span></div>
+        <div id="timer-display" class="stat-box">Time: <span id="time">30</span>s</div>
+    </div>
+    
+    <button id="resetButton">Start Game</button>
 
-    <div id="messageBox" class="message-box">Dot Clicked!</div>
+    <div id="messageBox" class="message-box">Game Started!</div>
 
     <script>
-        // Get DOM elements
+        // DOM Elements
         const gameContainer = document.getElementById('game-container');
         const dot = document.getElementById('dot');
         const scoreDisplay = document.getElementById('score');
         const resetButton = document.getElementById('resetButton');
         const messageBox = document.getElementById('messageBox');
+        const timeDisplay = document.getElementById('time');
 
-        // Game state
+        // Game Configuration
+        const GAME_DURATION = 30; // seconds
+
+        // Game State
         let score = 0;
-        let gameContainerWidth = gameContainer.clientWidth;
-        let gameContainerHeight = gameContainer.clientHeight;
-        const dotWidth = dot.offsetWidth;
-        const dotHeight = dot.offsetHeight;
+        let timeLeft = GAME_DURATION;
+        let gameActive = false;
+        let timerInterval;
+        let gameContainerWidth = 0; // Will be set on load/resize
+        let gameContainerHeight = 0; // Will be set on load/resize
+        let dotWidth = 0; // Will be set on load
+        let dotHeight = 0; // Will be set on load
 
         // Function to show a temporary message
-        function showMessage(message, duration = 1000) {
+        function showMessage(message, type = 'success', duration = 1500) {
             messageBox.textContent = message;
+            messageBox.classList.remove('error', 'success'); // Remove previous types
+            if (type === 'error') {
+                messageBox.classList.add('error');
+            } else {
+                messageBox.classList.add('success'); // Default to success if not specified
+            }
             messageBox.classList.add('show');
             setTimeout(() => {
                 messageBox.classList.remove('show');
             }, duration);
         }
+        
+        // Function to update game container and dot dimensions
+        function updateDimensions() {
+            gameContainerWidth = gameContainer.clientWidth;
+            gameContainerHeight = gameContainer.clientHeight;
+            // It's important to get dot dimensions after it's visible and styled
+            // If they are fixed, you can define them as constants
+            if (dot.offsetWidth > 0) dotWidth = dot.offsetWidth;
+            if (dot.offsetHeight > 0) dotHeight = dot.offsetHeight;
+        }
+
 
         // Function to move the dot to a random position
         function moveDot() {
-            // Update container dimensions in case of resize
-            gameContainerWidth = gameContainer.clientWidth;
-            gameContainerHeight = gameContainer.clientHeight;
+            if (!gameActive) return; // Don't move if game is not active
+
+            // Ensure dimensions are up-to-date
+            updateDimensions();
             
-            // Calculate maximum possible x and y coordinates for the dot
-            // The dot's position is its top-left corner, so we subtract its dimensions
             const maxX = gameContainerWidth - dotWidth;
             const maxY = gameContainerHeight - dotHeight;
 
-            // Generate random coordinates, ensuring they are not negative
             const randomX = Math.max(0, Math.floor(Math.random() * maxX));
             const randomY = Math.max(0, Math.floor(Math.random() * maxY));
 
-            // Apply the new position to the dot
             dot.style.left = randomX + 'px';
             dot.style.top = randomY + 'px';
         }
 
         // Function to update the score display
-        function updateScore() {
+        function updateScoreDisplay() {
             scoreDisplay.textContent = score;
+        }
+
+        // Function to update the timer display
+        function updateTimerDisplay() {
+            timeDisplay.textContent = timeLeft;
+        }
+
+        // Function to handle game over
+        function gameOver() {
+            gameActive = false;
+            clearInterval(timerInterval); // Stop the timer
+            dot.classList.add('disabled'); // Visually disable dot
+            showMessage(`Time's Up! Final Score: ${score}`, 'error', 3000);
+            resetButton.textContent = 'Play Again?';
+        }
+
+        // Function to start the timer
+        function startTimer() {
+            timeLeft = GAME_DURATION;
+            updateTimerDisplay();
+            
+            // Clear any existing interval before starting a new one
+            if (timerInterval) {
+                clearInterval(timerInterval);
+            }
+
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                updateTimerDisplay();
+                if (timeLeft <= 0) {
+                    gameOver();
+                }
+            }, 1000);
+        }
+
+        // Function to start/reset the game
+        function startGame() {
+            score = 0;
+            gameActive = true;
+            updateScoreDisplay();
+            dot.classList.remove('disabled'); // Enable dot
+            resetButton.textContent = 'Reset Game';
+            showMessage('Game On!', 'success', 1000);
+            startTimer();
+            moveDot(); // Initial dot placement
         }
 
         // Event listener for clicking the dot
         dot.addEventListener('click', () => {
-            score++; // Increment score
-            updateScore(); // Update the displayed score
-            showMessage('Great Shot!'); // Show feedback message
-            moveDot(); // Move the dot to a new random position
+            if (gameActive) {
+                score++;
+                updateScoreDisplay();
+                // Optional: message for each click, can be too noisy
+                // showMessage('Hit!', 'success', 500); 
+                moveDot();
+            }
         });
 
         // Event listener for the reset button
-        resetButton.addEventListener('click', () => {
-            score = 0;
-            updateScore();
-            showMessage('Game Reset!', 1500);
-            moveDot(); // Move dot to a new position
-        });
+        resetButton.addEventListener('click', startGame);
         
         // Function to handle window resize
         function handleResize() {
-            // Recalculate game container dimensions
-            gameContainerWidth = gameContainer.clientWidth;
-            gameContainerHeight = gameContainer.clientHeight;
-            // Reposition the dot to ensure it's within the new bounds
-            // This is a simple approach; a more complex game might need to pause and rescale elements
-            moveDot(); 
+            updateDimensions();
+            // If game is active, reposition dot to ensure it's within new bounds
+            if (gameActive) {
+                 // Check if dot is outside new bounds and move it if necessary
+                const currentDotX = parseInt(dot.style.left || 0);
+                const currentDotY = parseInt(dot.style.top || 0);
+
+                if (currentDotX + dotWidth > gameContainerWidth || currentDotY + dotHeight > gameContainerHeight) {
+                    moveDot();
+                }
+            }
         }
 
         // Add event listener for window resize
         window.addEventListener('resize', handleResize);
 
-        // Initial setup
+        // Initial setup when the page loads
         window.onload = function() {
-            updateScore(); // Set initial score display
-            moveDot();     // Place the dot for the first time
-            // Ensure initial dimensions are correct
-            gameContainerWidth = gameContainer.clientWidth;
-            gameContainerHeight = gameContainer.clientHeight;
+            updateDimensions(); // Get initial dimensions
+            updateScoreDisplay();
+            updateTimerDisplay();
+            // Game doesn't start automatically, user clicks "Start Game"
+            dot.classList.add('disabled'); // Start with dot disabled
+            showMessage('Click "Start Game" to play!', 'success', 2000);
         };
     </script>
 
