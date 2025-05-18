@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Catch the Dot - Timed Challenge!</title>
+    <title>Catch the Dot - With Sounds!</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
         body {
             font-family: 'Press Start 2P', cursive;
@@ -22,7 +23,7 @@
         #game-container {
             width: 90vw;
             max-width: 600px;
-            height: 65vh; /* Adjusted height for timer */
+            height: 65vh;
             max-height: 350px;
             background-color: #2d3748; /* Tailwind gray-800 */
             border: 4px solid #4a5568; /* Tailwind gray-600 */
@@ -46,7 +47,7 @@
             background-color: #fc8181; /* Tailwind red-400 */
             transform: scale(1.1);
         }
-        #dot.disabled { /* Style for when the dot is not clickable */
+        #dot.disabled {
             opacity: 0.5;
             cursor: not-allowed;
         }
@@ -54,12 +55,12 @@
             display: flex;
             justify-content: space-around;
             width: 90%;
-            max-width: 400px; /* Max width for stats */
-            margin-top: 15px; /* Reduced margin */
+            max-width: 400px;
+            margin-top: 15px;
             margin-bottom: 15px;
         }
         .stat-box {
-            font-size: 1.25rem; /* 20px */
+            font-size: 1.25rem;
             padding: 8px 15px;
             background-color: #4a5568; /* Tailwind gray-700 */
             border-radius: 8px;
@@ -97,7 +98,7 @@
             border-radius: 8px;
             font-size: 1rem;
             cursor: pointer;
-            margin-top: 10px; /* Reduced margin */
+            margin-top: 10px;
             transition: background-color 0.2s ease, transform 0.1s ease;
             box-shadow: 0 4px 6px rgba(0,0,0,0.2);
         }
@@ -115,13 +116,13 @@
                 height: 30px;
             }
             .stats-container {
-                flex-direction: column; /* Stack stats vertically on small screens */
+                flex-direction: column;
                 align-items: center;
             }
             .stat-box {
-                font-size: 1rem; /* 16px */
-                margin-bottom: 8px; /* Add space between stacked boxes */
-                width: 70%; /* Make stat boxes wider when stacked */
+                font-size: 1rem;
+                margin-bottom: 8px;
+                width: 70%;
             }
             button#resetButton {
                 font-size: 0.9rem;
@@ -143,7 +144,7 @@
     
     <button id="resetButton">Start Game</button>
 
-    <div id="messageBox" class="message-box">Game Started!</div>
+    <div id="messageBox" class="message-box">Game Ready!</div>
 
     <script>
         // DOM Elements
@@ -156,149 +157,190 @@
 
         // Game Configuration
         const GAME_DURATION = 30; // seconds
+        const LOW_TIME_THRESHOLD = 5; // seconds, for warning sound
 
         // Game State
         let score = 0;
         let timeLeft = GAME_DURATION;
         let gameActive = false;
         let timerInterval;
-        let gameContainerWidth = 0; // Will be set on load/resize
-        let gameContainerHeight = 0; // Will be set on load/resize
-        let dotWidth = 0; // Will be set on load
-        let dotHeight = 0; // Will be set on load
+        let gameContainerWidth = 0;
+        let gameContainerHeight = 0;
+        let dotWidth = 0;
+        let dotHeight = 0;
+        let audioInitialized = false; // Flag to check if Tone.start() has been called
+
+        // --- Tone.js Sound Synthesizers ---
+        // Ensure synths are created only once
+        let clickSound, gameOverSound, lowTimeSound, startSound;
+
+        function initializeSounds() {
+            if (!clickSound) { // Check if already initialized
+                // Sound for clicking the dot
+                clickSound = new Tone.Synth({
+                    oscillator: { type: 'triangle' },
+                    envelope: { attack: 0.005, decay: 0.1, sustain: 0.05, release: 0.1 }
+                }).toDestination();
+            }
+            if (!gameOverSound) {
+                // Sound for game over
+                gameOverSound = new Tone.Synth({
+                    oscillator: { type: 'sine' },
+                    envelope: { attack: 0.01, decay: 0.5, sustain: 0.1, release: 0.5 }
+                }).toDestination();
+            }
+            if (!lowTimeSound) {
+                // Sound for low time warning
+                lowTimeSound = new Tone.Synth({
+                    oscillator: { type: 'square' },
+                    envelope: { attack: 0.01, decay: 0.05, sustain: 0, release: 0.1 }
+                }).toDestination();
+            }
+            if (!startSound) {
+                // Sound for starting the game
+                startSound = new Tone.Synth({
+                    oscillator: { type: 'sawtooth' },
+                    envelope: { attack: 0.01, decay: 0.2, sustain: 0.1, release: 0.2 }
+                }).toDestination();
+            }
+        }
+        
+        // Call initializeSounds early, but Tone.start() will be on user interaction
+        initializeSounds();
+
 
         // Function to show a temporary message
         function showMessage(message, type = 'success', duration = 1500) {
             messageBox.textContent = message;
-            messageBox.classList.remove('error', 'success'); // Remove previous types
-            if (type === 'error') {
-                messageBox.classList.add('error');
-            } else {
-                messageBox.classList.add('success'); // Default to success if not specified
-            }
+            messageBox.classList.remove('error', 'success');
+            if (type === 'error') messageBox.classList.add('error');
+            else messageBox.classList.add('success');
             messageBox.classList.add('show');
-            setTimeout(() => {
-                messageBox.classList.remove('show');
-            }, duration);
+            setTimeout(() => messageBox.classList.remove('show'), duration);
         }
         
-        // Function to update game container and dot dimensions
         function updateDimensions() {
             gameContainerWidth = gameContainer.clientWidth;
             gameContainerHeight = gameContainer.clientHeight;
-            // It's important to get dot dimensions after it's visible and styled
-            // If they are fixed, you can define them as constants
             if (dot.offsetWidth > 0) dotWidth = dot.offsetWidth;
             if (dot.offsetHeight > 0) dotHeight = dot.offsetHeight;
         }
 
-
-        // Function to move the dot to a random position
         function moveDot() {
-            if (!gameActive) return; // Don't move if game is not active
-
-            // Ensure dimensions are up-to-date
+            if (!gameActive) return;
             updateDimensions();
-            
             const maxX = gameContainerWidth - dotWidth;
             const maxY = gameContainerHeight - dotHeight;
-
             const randomX = Math.max(0, Math.floor(Math.random() * maxX));
             const randomY = Math.max(0, Math.floor(Math.random() * maxY));
-
             dot.style.left = randomX + 'px';
             dot.style.top = randomY + 'px';
         }
 
-        // Function to update the score display
         function updateScoreDisplay() {
             scoreDisplay.textContent = score;
         }
 
-        // Function to update the timer display
         function updateTimerDisplay() {
             timeDisplay.textContent = timeLeft;
         }
 
-        // Function to handle game over
         function gameOver() {
             gameActive = false;
-            clearInterval(timerInterval); // Stop the timer
-            dot.classList.add('disabled'); // Visually disable dot
+            clearInterval(timerInterval);
+            dot.classList.add('disabled');
             showMessage(`Time's Up! Final Score: ${score}`, 'error', 3000);
             resetButton.textContent = 'Play Again?';
+            // Play game over sound
+            if (audioInitialized && gameOverSound) {
+                gameOverSound.triggerAttackRelease('C3', '0.5s', Tone.now());
+            }
         }
 
-        // Function to start the timer
         function startTimer() {
             timeLeft = GAME_DURATION;
             updateTimerDisplay();
-            
-            // Clear any existing interval before starting a new one
-            if (timerInterval) {
-                clearInterval(timerInterval);
-            }
+            if (timerInterval) clearInterval(timerInterval);
 
             timerInterval = setInterval(() => {
                 timeLeft--;
                 updateTimerDisplay();
                 if (timeLeft <= 0) {
                     gameOver();
+                } else if (timeLeft <= LOW_TIME_THRESHOLD && timeLeft > 0) {
+                    // Play low time warning sound
+                    if (audioInitialized && lowTimeSound) {
+                        lowTimeSound.triggerAttackRelease('G4', '0.05s', Tone.now());
+                    }
                 }
             }, 1000);
         }
 
-        // Function to start/reset the game
-        function startGame() {
+        async function startGame() {
+            // Start Tone.js Audio Context on the first user interaction (e.g., button click)
+            // This is crucial for browsers that block auto-playing audio.
+            if (!audioInitialized) {
+                try {
+                    await Tone.start();
+                    console.log("AudioContext started successfully!");
+                    audioInitialized = true; // Set flag so it's not called again
+                    // Re-initialize sounds if they weren't fully ready (though they should be)
+                    initializeSounds(); 
+                } catch (e) {
+                    console.error("Error starting AudioContext:", e);
+                    showMessage("Could not enable audio.", "error", 2000);
+                    // Optionally, proceed without audio or inform user audio is disabled.
+                }
+            }
+
             score = 0;
             gameActive = true;
             updateScoreDisplay();
-            dot.classList.remove('disabled'); // Enable dot
+            dot.classList.remove('disabled');
             resetButton.textContent = 'Reset Game';
             showMessage('Game On!', 'success', 1000);
+            
+            // Play start game sound
+            if (audioInitialized && startSound) {
+                startSound.triggerAttackRelease('C4', '0.2s', Tone.now());
+            }
+
             startTimer();
-            moveDot(); // Initial dot placement
+            moveDot();
         }
 
-        // Event listener for clicking the dot
         dot.addEventListener('click', () => {
             if (gameActive) {
                 score++;
                 updateScoreDisplay();
-                // Optional: message for each click, can be too noisy
-                // showMessage('Hit!', 'success', 500); 
+                // Play click sound
+                if (audioInitialized && clickSound) {
+                    // Trigger a short, high-pitched note
+                    clickSound.triggerAttackRelease('C5', '0.05s', Tone.now());
+                }
                 moveDot();
             }
         });
 
-        // Event listener for the reset button
         resetButton.addEventListener('click', startGame);
         
-        // Function to handle window resize
         function handleResize() {
             updateDimensions();
-            // If game is active, reposition dot to ensure it's within new bounds
             if (gameActive) {
-                 // Check if dot is outside new bounds and move it if necessary
                 const currentDotX = parseInt(dot.style.left || 0);
                 const currentDotY = parseInt(dot.style.top || 0);
-
                 if (currentDotX + dotWidth > gameContainerWidth || currentDotY + dotHeight > gameContainerHeight) {
                     moveDot();
                 }
             }
         }
-
-        // Add event listener for window resize
         window.addEventListener('resize', handleResize);
 
-        // Initial setup when the page loads
         window.onload = function() {
-            updateDimensions(); // Get initial dimensions
+            updateDimensions();
             updateScoreDisplay();
             updateTimerDisplay();
-            // Game doesn't start automatically, user clicks "Start Game"
-            dot.classList.add('disabled'); // Start with dot disabled
+            dot.classList.add('disabled');
             showMessage('Click "Start Game" to play!', 'success', 2000);
         };
     </script>
