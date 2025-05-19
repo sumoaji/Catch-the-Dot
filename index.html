@@ -10,8 +10,8 @@
     <style>
         body {
             font-family: 'Press Start 2P', cursive;
-            background-color: #1a202c; /* Tailwind gray-900 */
-            color: #e2e8f0; /* Tailwind gray-300 */
+            background-color: #1a202c; 
+            color: #e2e8f0; 
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -25,8 +25,8 @@
             max-width: 600px;
             height: 65vh;
             max-height: 350px;
-            background-color: #2d3748; /* Tailwind gray-800 */
-            border: 4px solid #4a5568; /* Tailwind gray-600 */
+            background-color: #2d3748; 
+            border: 4px solid #4a5568; 
             border-radius: 12px;
             position: relative;
             cursor: crosshair;
@@ -36,7 +36,7 @@
         #dot {
             width: 40px;
             height: 40px;
-            background-color: #f56565; /* Tailwind red-500 */
+            background-color: #f56565; 
             border-radius: 50%;
             position: absolute;
             cursor: pointer;
@@ -44,7 +44,7 @@
             box-shadow: 0 0 15px #f56565, 0 0 25px #f56565aa;
         }
         #dot:hover {
-            background-color: #fc8181; /* Tailwind red-400 */
+            background-color: #fc8181; 
             transform: scale(1.1);
         }
         #dot.disabled {
@@ -62,7 +62,7 @@
         .stat-box {
             font-size: 1.25rem;
             padding: 8px 15px;
-            background-color: #4a5568; /* Tailwind gray-700 */
+            background-color: #4a5568; 
             border-radius: 8px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.2);
             text-align: center;
@@ -72,7 +72,7 @@
             top: 20px;
             left: 50%;
             transform: translateX(-50%);
-            background-color: #48bb78; /* Tailwind green-500 */
+            background-color: #48bb78; 
             color: white;
             padding: 12px 20px;
             border-radius: 8px;
@@ -87,11 +87,11 @@
             top: 30px;
         }
         .message-box.error {
-            background-color: #e53e3e; /* Tailwind red-600 */
+            background-color: #e53e3e; 
         }
         button#resetButton {
             font-family: 'Press Start 2P', cursive;
-            background-color: #4299e1; /* Tailwind blue-500 */
+            background-color: #4299e1; 
             color: white;
             border: none;
             padding: 12px 24px;
@@ -103,7 +103,7 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.2);
         }
         button#resetButton:hover {
-            background-color: #3182ce; /* Tailwind blue-600 */
+            background-color: #3182ce; 
             transform: translateY(-2px);
         }
         button#resetButton:active {
@@ -147,202 +147,7 @@
     <div id="messageBox" class="message-box">Game Ready!</div>
 
     <script>
-        // DOM Elements
-        const gameContainer = document.getElementById('game-container');
-        const dot = document.getElementById('dot');
-        const scoreDisplay = document.getElementById('score');
-        const resetButton = document.getElementById('resetButton');
-        const messageBox = document.getElementById('messageBox');
-        const timeDisplay = document.getElementById('time');
-
-        // Game Configuration
-        const GAME_DURATION = 30; // seconds
-        const LOW_TIME_THRESHOLD = 5; // seconds, for warning sound
-
-        // Game State
-        let score = 0;
-        let timeLeft = GAME_DURATION;
-        let gameActive = false;
-        let timerInterval;
-        let gameContainerWidth = 0;
-        let gameContainerHeight = 0;
-        let dotWidth = 0;
-        let dotHeight = 0;
-        let audioInitialized = false; // Flag to check if Tone.start() has been called
-
-        // --- Tone.js Sound Synthesizers ---
-        // Ensure synths are created only once
-        let clickSound, gameOverSound, lowTimeSound, startSound;
-
-        function initializeSounds() {
-            if (!clickSound) { // Check if already initialized
-                // Sound for clicking the dot
-                clickSound = new Tone.Synth({
-                    oscillator: { type: 'triangle' },
-                    envelope: { attack: 0.005, decay: 0.1, sustain: 0.05, release: 0.1 }
-                }).toDestination();
-            }
-            if (!gameOverSound) {
-                // Sound for game over
-                gameOverSound = new Tone.Synth({
-                    oscillator: { type: 'sine' },
-                    envelope: { attack: 0.01, decay: 0.5, sustain: 0.1, release: 0.5 }
-                }).toDestination();
-            }
-            if (!lowTimeSound) {
-                // Sound for low time warning
-                lowTimeSound = new Tone.Synth({
-                    oscillator: { type: 'square' },
-                    envelope: { attack: 0.01, decay: 0.05, sustain: 0, release: 0.1 }
-                }).toDestination();
-            }
-            if (!startSound) {
-                // Sound for starting the game
-                startSound = new Tone.Synth({
-                    oscillator: { type: 'sawtooth' },
-                    envelope: { attack: 0.01, decay: 0.2, sustain: 0.1, release: 0.2 }
-                }).toDestination();
-            }
-        }
-        
-        // Call initializeSounds early, but Tone.start() will be on user interaction
-        initializeSounds();
-
-
-        // Function to show a temporary message
-        function showMessage(message, type = 'success', duration = 1500) {
-            messageBox.textContent = message;
-            messageBox.classList.remove('error', 'success');
-            if (type === 'error') messageBox.classList.add('error');
-            else messageBox.classList.add('success');
-            messageBox.classList.add('show');
-            setTimeout(() => messageBox.classList.remove('show'), duration);
-        }
-        
-        function updateDimensions() {
-            gameContainerWidth = gameContainer.clientWidth;
-            gameContainerHeight = gameContainer.clientHeight;
-            if (dot.offsetWidth > 0) dotWidth = dot.offsetWidth;
-            if (dot.offsetHeight > 0) dotHeight = dot.offsetHeight;
-        }
-
-        function moveDot() {
-            if (!gameActive) return;
-            updateDimensions();
-            const maxX = gameContainerWidth - dotWidth;
-            const maxY = gameContainerHeight - dotHeight;
-            const randomX = Math.max(0, Math.floor(Math.random() * maxX));
-            const randomY = Math.max(0, Math.floor(Math.random() * maxY));
-            dot.style.left = randomX + 'px';
-            dot.style.top = randomY + 'px';
-        }
-
-        function updateScoreDisplay() {
-            scoreDisplay.textContent = score;
-        }
-
-        function updateTimerDisplay() {
-            timeDisplay.textContent = timeLeft;
-        }
-
-        function gameOver() {
-            gameActive = false;
-            clearInterval(timerInterval);
-            dot.classList.add('disabled');
-            showMessage(`Time's Up! Final Score: ${score}`, 'error', 3000);
-            resetButton.textContent = 'Play Again?';
-            // Play game over sound
-            if (audioInitialized && gameOverSound) {
-                gameOverSound.triggerAttackRelease('C3', '0.5s', Tone.now());
-            }
-        }
-
-        function startTimer() {
-            timeLeft = GAME_DURATION;
-            updateTimerDisplay();
-            if (timerInterval) clearInterval(timerInterval);
-
-            timerInterval = setInterval(() => {
-                timeLeft--;
-                updateTimerDisplay();
-                if (timeLeft <= 0) {
-                    gameOver();
-                } else if (timeLeft <= LOW_TIME_THRESHOLD && timeLeft > 0) {
-                    // Play low time warning sound
-                    if (audioInitialized && lowTimeSound) {
-                        lowTimeSound.triggerAttackRelease('G4', '0.05s', Tone.now());
-                    }
-                }
-            }, 1000);
-        }
-
-        async function startGame() {
-            // Start Tone.js Audio Context on the first user interaction (e.g., button click)
-            // This is crucial for browsers that block auto-playing audio.
-            if (!audioInitialized) {
-                try {
-                    await Tone.start();
-                    console.log("AudioContext started successfully!");
-                    audioInitialized = true; // Set flag so it's not called again
-                    // Re-initialize sounds if they weren't fully ready (though they should be)
-                    initializeSounds(); 
-                } catch (e) {
-                    console.error("Error starting AudioContext:", e);
-                    showMessage("Could not enable audio.", "error", 2000);
-                    // Optionally, proceed without audio or inform user audio is disabled.
-                }
-            }
-
-            score = 0;
-            gameActive = true;
-            updateScoreDisplay();
-            dot.classList.remove('disabled');
-            resetButton.textContent = 'Reset Game';
-            showMessage('Game On!', 'success', 1000);
-            
-            // Play start game sound
-            if (audioInitialized && startSound) {
-                startSound.triggerAttackRelease('C4', '0.2s', Tone.now());
-            }
-
-            startTimer();
-            moveDot();
-        }
-
-        dot.addEventListener('click', () => {
-            if (gameActive) {
-                score++;
-                updateScoreDisplay();
-                // Play click sound
-                if (audioInitialized && clickSound) {
-                    // Trigger a short, high-pitched note
-                    clickSound.triggerAttackRelease('C5', '0.05s', Tone.now());
-                }
-                moveDot();
-            }
-        });
-
-        resetButton.addEventListener('click', startGame);
-        
-        function handleResize() {
-            updateDimensions();
-            if (gameActive) {
-                const currentDotX = parseInt(dot.style.left || 0);
-                const currentDotY = parseInt(dot.style.top || 0);
-                if (currentDotX + dotWidth > gameContainerWidth || currentDotY + dotHeight > gameContainerHeight) {
-                    moveDot();
-                }
-            }
-        }
-        window.addEventListener('resize', handleResize);
-
-        window.onload = function() {
-            updateDimensions();
-            updateScoreDisplay();
-            updateTimerDisplay();
-            dot.classList.add('disabled');
-            showMessage('Click "Start Game" to play!', 'success', 2000);
-        };
+const gCo=document.getElementById('game-container');const dEl=document.getElementById('dot');const sD=document.getElementById('score');const rB=document.getElementById('resetButton');const mB=document.getElementById('messageBox');const tD=document.getElementById('time');const GD=30;const LTT=5;const sP=10;let sc=0;let tL=GD;let gA=false;let tI;let gCW=0;let gCH=0;let dW=0;let dH=0;let aI=false;let cS,gOS,lTS,sS;function iSnd(){if(!cS){cS=new Tone.Synth({oscillator:{type:'triangle'},envelope:{attack:0.005,decay:0.1,sustain:0.05,release:0.1}}).toDestination()}if(!gOS){gOS=new Tone.Synth({oscillator:{type:'sine'},envelope:{attack:0.01,decay:0.5,sustain:0.1,release:0.5}}).toDestination()}if(!lTS){lTS=new Tone.Synth({oscillator:{type:'square'},envelope:{attack:0.01,decay:0.05,sustain:0,release:0.1}}).toDestination()}if(!sS){sS=new Tone.Synth({oscillator:{type:'sawtooth'},envelope:{attack:0.01,decay:0.2,sustain:0.1,release:0.2}}).toDestination()}}iSnd();function sMsg(msg,type='success',dur=1500){mB.textContent=msg;mB.classList.remove('error','success');if(type==='error')mB.classList.add('error');else mB.classList.add('success');mB.classList.add('show');setTimeout(()=>mB.classList.remove('show'),dur)}function uDim(){gCW=gCo.clientWidth;gCH=gCo.clientHeight;if(dEl.offsetWidth>0)dW=dEl.offsetWidth;if(dEl.offsetHeight>0)dH=dEl.offsetHeight}function mD(){if(!gA)return;uDim();const eSW=gCW-dW-(sP*2);const eSH=gCH-dH-(sP*2);const rX=sP+Math.floor(Math.random()*Math.max(0,eSW));const rY=sP+Math.floor(Math.random()*Math.max(0,eSH));dEl.style.left=rX+'px';dEl.style.top=rY+'px'}function uScD(){sD.textContent=sc}function uTD(){tD.textContent=tL}function gO(){gA=false;clearInterval(tI);dEl.classList.add('disabled');sMsg(`Time's Up! Final Score: ${sc}`,'error',3000);rB.textContent='Play Again?';if(aI&&gOS){gOS.triggerAttackRelease('C3','0.5s',Tone.now())}}function sTmr(){tL=GD;uTD();if(tI)clearInterval(tI);tI=setInterval(()=>{tL--;uTD();if(tL<=0){gO()}else if(tL<=LTT&&tL>0){if(aI&&lTS){lTS.triggerAttackRelease('G4','0.05s',Tone.now())}}},1000)}async function sG(){if(!aI){try{await Tone.start();console.log("AudioContext started successfully!");aI=true;iSnd()}catch(e){console.error("Error starting AudioContext:",e);sMsg("Could not enable audio.","error",2000)}}sc=0;gA=true;uScD();dEl.classList.remove('disabled');rB.textContent='Reset Game';sMsg('Game On!','success',1000);if(aI&&sS){sS.triggerAttackRelease('C4','0.2s',Tone.now())}sTmr();mD()}dEl.addEventListener('click',()=>{if(gA){sc++;uScD();if(aI&&cS){cS.triggerAttackRelease('C5','0.05s',Tone.now())}mD()}});rB.addEventListener('click',sG);function hR(){uDim();if(gA){const cDX=parseInt(dEl.style.left||0);const cDY=parseInt(dEl.style.top||0);const mX=gCW-dW-sP;const mY=gCH-dH-sP;if(cDX<sP||cDX>mX||cDY<sP||cDY>mY){mD()}}}window.addEventListener('resize',hR);window.onload=function(){uDim();uScD();uTD();dEl.classList.add('disabled');sMsg('Click "Start Game" to play!','success',2000)};
     </script>
 
 </body>
